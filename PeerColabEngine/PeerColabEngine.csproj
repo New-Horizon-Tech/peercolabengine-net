@@ -7,7 +7,7 @@
     <Description>The transport abstraction backing the PeerColab platform.</Description>
     <RepositoryUrl>https://github.com/New-Horizon-Tech/peercolabengine-net</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="LICENSE" Pack="true" PackagePath="" />
+    <PackageReference Include="LICENSE.txt" Pack="true" PackagePath="" />
   </ItemGroup>
 
 </Project>
