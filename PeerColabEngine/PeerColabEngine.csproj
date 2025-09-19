@@ -7,12 +7,16 @@
     <Description>The transport abstraction backing the PeerColab platform.</Description>
     <RepositoryUrl>https://github.com/New-Horizon-Tech/peercolabengine-net</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseExpression>License Condition v1.0</PackageLicenseExpression>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="9.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
 
 </Project>
