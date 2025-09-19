@@ -5,9 +5,9 @@
     <PackageId>PeerColabEngine</PackageId>
     <Authors>New Horizon Tech</Authors>
     <Description>The transport abstraction backing the PeerColab platform.</Description>
-    <RepositoryUrl>https://github.com/your-org/your-repo</RepositoryUrl>
+    <RepositoryUrl>https://github.com/New-Horizon-Tech/peercolabengine-net</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>License Condition v1.0</PackageLicenseExpression>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 

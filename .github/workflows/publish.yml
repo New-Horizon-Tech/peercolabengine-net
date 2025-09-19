@@ -1,0 +1,62 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - 'v*'   # e.g., v1.2.3
+
+jobs:
+  pack-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write   # needed only if also pushing to GitHub Packages
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Determine version from tag
+        id: v
+        run: |
+          # GITHUB_REF_NAME is like "v1.2.3" on a tag push
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Pack
+        run: dotnet pack ./PeerColabEngine/PeerColabEngine.csproj \
+               --configuration Release \
+               --no-build \
+               -p:PackageVersion=${{ steps.v.outputs.version }} \
+               -p:ContinuousIntegrationBuild=true \
+               -o ./artifacts
+
+      - name: Push to NuGet.org
+        run: dotnet nuget push "artifacts/*.nupkg" \
+               --api-key "${{ secrets.NUGET_API_KEY }}" \
+               --source "https://api.nuget.org/v3/index.json" \
+               --skip-duplicate
+
+      # Optional: also publish to GitHub Packages (replace OWNER)
+      # - name: Push to GitHub Packages
+      #   run: dotnet nuget push "artifacts/*.nupkg" \
+      #          --api-key "${{ secrets.GITHUB_TOKEN }}" \
+      #          --source "https://nuget.pkg.github.com/OWNER/index.json" \
+      #          --skip-duplicate
