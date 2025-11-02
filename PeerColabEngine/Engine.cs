@@ -62,6 +62,23 @@ namespace PeerColabEngine
         };
     }
 
+    public class OutOfContextOperationPathParameter
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+
+    public class OutOfContextOperation
+    {
+        public string UsageId { get; set; } = string.Empty;
+        public string OperationId { get; set; } = string.Empty;
+        public string OperationVerb { get; set; } = string.Empty;
+        public string OperationType { get; set; } = string.Empty;
+        public object RequestJson { get; set; }
+        public List<OutOfContextOperationPathParameter> PathParameters { get; set; } = new List<OutOfContextOperationPathParameter>();
+
+    }
+
     public interface ContextCache
     {
         Task<bool> Put(Guid transactionId, CallInformation ctx);
@@ -505,6 +522,91 @@ namespace PeerColabEngine
                 return result.Convert<R>();
             }
         }
+
+        public async Task<Result<object>> AcceptOperationAsync(OutOfContextOperation operation, List<Attribute> customAttributes = null)
+        {
+            if (customAttributes == null)
+                customAttributes = new List<Attribute>();
+
+            OperationRequest<object, object> call = null;
+            if (operation.OperationType == "request")
+            {
+                call = new RequestOperationRequest<object, object>(
+                    operation.UsageId,
+                    new TransportOperation<object, object>(
+                        operation.OperationType,
+                        operation.OperationId,
+                        operation.OperationVerb,
+                        new List<string>(),
+                        new TransportOperationSettings { RequiresTenant = false, CharacterSetup = new TransportOperationCharacterSetup() }
+                    ),
+                    operation.RequestJson);
+            }
+            else
+            {
+                call = new MessageOperationRequest<object>(
+                        operation.UsageId,
+                        new TransportOperation<object, object>(
+                            operation.OperationType,
+                            operation.OperationId,
+                            operation.OperationVerb,
+                            new List<string>(),
+                            new TransportOperationSettings { RequiresTenant = false, CharacterSetup = new TransportOperationCharacterSetup() }
+                        ),
+                        operation.RequestJson);
+            }
+
+            // Clone call info
+            var requestCallInfo = this.callInfo.Clone();
+
+            if (Guid.Empty == requestCallInfo.TransactionId)
+                requestCallInfo.TransactionId = Guid.NewGuid();
+
+            var ctx = new TransportContext(
+                call.AsOperationInformation(this.clientIdentifier),
+                requestCallInfo,
+                this.config.Serializer
+            );
+
+            // Add path parameters from operation
+            var operationPathParameters = operation.PathParameters?
+                .Select(param => new Attribute(
+                    param.Name,
+                    param.Value
+                ))
+                .ToList() ?? new List<Attribute>();
+
+            foreach (var param in operationPathParameters)
+            {
+                if (ctx.HasPathParameter(param.Name))
+                    continue;
+
+                ctx.Call.PathParams.Add(param);
+            }
+
+            // Append missing attributes
+            foreach (var attribute in customAttributes)
+            {
+                if (ctx.HasAttribute(attribute.Name))
+                    continue;
+
+                ctx.Call.Attributes.Add(attribute);
+            }
+
+            // Handle based on operation type
+            Result<object> result;
+
+            if (ctx.Operation.Type == "request")
+            {
+                result = await this.config.Interceptors.HandleAsRequest(operation.RequestJson, ctx) as Result<object>;
+            }
+            else
+            {
+                result = await this.config.Interceptors.HandleAsMessage(operation.RequestJson, ctx) as Result<object>;
+            }
+
+            return result.AssignSerializer(this.config.Serializer);
+        }
     }
 
     // You may need to implement or adjust the following types for your codebase:
@@ -939,7 +1041,7 @@ namespace PeerColabEngine
             return this;
         }
 
-        public Result AsGeneric()
+        public Result ConvertToEmpty()
         {
             return new Result
             {
@@ -972,19 +1074,19 @@ namespace PeerColabEngine
             }
         }
 
-        public Result<TOut> Maybe<TOut>(System.Func<T, Result<TOut>> onSuccess, bool throwErrors = false)
+        public Result<TOut> Maybe<TOut>(System.Func<T, Metavalues, Result<TOut>> onSuccess, bool throwErrors = false)
         {
             if (throwErrors)
             {
                 if (!Success)
                     return Convert<TOut>();
-                return onSuccess(Value);
+                return onSuccess(Value, Meta);
             }
             try
             {
                 if (!Success)
                     return Convert<TOut>();
-                return onSuccess(Value);
+                return onSuccess(Value, Meta);
             }
             catch (System.Exception e)
             {
@@ -992,13 +1094,13 @@ namespace PeerColabEngine
             }
         }
 
-        public Result<T> MaybePassThrough(System.Func<T, Result<object>> onSuccess, bool throwErrors = false)
+        public Result<T> MaybePassThrough(System.Func<T, Metavalues, Result<object>> onSuccess, bool throwErrors = false)
         {
             if (throwErrors)
             {
                 if (!Success)
                     return this;
-                var result = onSuccess(Value);
+                var result = onSuccess(Value, Meta);
                 if (!result.Success)
                     return result.Convert<T>();
                 return this;
@@ -1007,7 +1109,7 @@ namespace PeerColabEngine
             {
                 if (!Success)
                     return this;
-                var result = onSuccess(Value);
+                var result = onSuccess(Value, Meta);
                 if (!result.Success)
                     return result.Convert<T>();
                 return this;
@@ -1018,19 +1120,19 @@ namespace PeerColabEngine
             }
         }
 
-        public async Task<Result<TOut>> MaybeAsync<TOut>(System.Func<T, Task<Result<TOut>>> onSuccess, bool throwErrors = false)
+        public async Task<Result<TOut>> MaybeAsync<TOut>(System.Func<T, Metavalues, Task<Result<TOut>>> onSuccess, bool throwErrors = false)
         {
             if (throwErrors)
             {
                 if (!Success)
                     return Convert<TOut>();
-                return await onSuccess(Value);
+                return await onSuccess(Value, Meta);
             }
             try
             {
                 if (!Success)
                     return Convert<TOut>();
-                return await onSuccess(Value);
+                return await onSuccess(Value, Meta);
             }
             catch (System.Exception e)
             {
@@ -1038,13 +1140,13 @@ namespace PeerColabEngine
             }
         }
 
-        public async Task<Result<T>> MaybePassThroughAsync(System.Func<T, Task<Result<object>>> onSuccess, bool throwErrors = false)
+        public async Task<Result<T>> MaybePassThroughAsync(System.Func<T, Metavalues, Task<Result<object>>> onSuccess, bool throwErrors = false)
         {
             if (throwErrors)
             {
                 if (!Success)
                     return this;
-                var result = await onSuccess(Value);
+                var result = await onSuccess(Value, Meta);
                 if (!result.Success)
                     return result.Convert<T>();
                 return this;
@@ -1053,7 +1155,7 @@ namespace PeerColabEngine
             {
                 if (!Success)
                     return this;
-                var result = await onSuccess(Value);
+                var result = await onSuccess(Value, Meta);
                 if (!result.Success)
                     return result.Convert<T>();
                 return this;
@@ -1118,6 +1220,7 @@ namespace PeerColabEngine
         public string DataTenant { get; set; }
         public CharacterMetaValues InitialCharacters { get; set; }
         public CharacterMetaValues CurrentCharacters { get; set; }
+        public List<Attribute> Attributes { get; set; }
 
         public bool KnowsInitialCharacters() => InitialCharacters != null;
         public bool KnowsCurrentCharacters() => CurrentCharacters != null;
@@ -1132,6 +1235,26 @@ namespace PeerColabEngine
         {
             CurrentCharacters = characters;
             return this;
+        }
+
+        public Metavalue WithAttribute(string name, object value) {
+            var attr = this.Attributes.FirstOrDefault(a => a.Name == name);
+            if (attr != null)
+                attr.Value = value;
+            else
+                this.Attributes.Add(new Attribute(name, value));
+            return this;
+        }
+
+        public bool HasAttribute(string name)
+        {
+            return this.Attributes.Any(a => a.Name == name);
+        }
+
+        public T GetAttribute<T>(string name)
+        {
+            var item = this.Attributes.FirstOrDefault(a => a.Name == name);
+            return item != null ? (T)item.Value : default;
         }
 
         public static Metavalue With(
@@ -1376,7 +1499,7 @@ namespace PeerColabEngine
             if (ctx.Operation.Type == "request")
                 return await HandleAsRequest(input, ctx);
             else
-                return (await HandleAsMessage(input, ctx)).AsGeneric();
+                return (await HandleAsMessage(input, ctx)).ConvertToEmpty();
         }
 
         public async Task<Result<object>> HandleAsMessage(object input, TransportContext ctx, bool matchSessions = false)
@@ -1471,9 +1594,9 @@ namespace PeerColabEngine
             {
                 if (patternHandlers.TryGetValue(matchingPattern, out var patternHandler))
                     return await RunRequestHandler(patternHandler, input, ctx);
-                return await InspectResponse(HandlerNotFound(ctx.Operation.Id).AsGeneric(), input, ctx);
+                return await InspectResponse(HandlerNotFound(ctx.Operation.Id).ConvertToEmpty(), input, ctx);
             }
-            return await InspectResponse(HandlerNotFound(ctx.Operation.Id).AsGeneric(), input, ctx);
+            return await InspectResponse(HandlerNotFound(ctx.Operation.Id).ConvertToEmpty(), input, ctx);
         }
 
         private async Task<Result<object>> RunMessageHandler(MessageInterceptor<object> handler, object input, TransportContext ctx)
