@@ -1082,6 +1082,17 @@ namespace PeerColabEngine
         {
             try
             {
+                if (Error != null)
+                {
+                    return new Result<TOut>
+                    {
+                        Success = Success,
+                        Value = default(TOut),
+                        StatusCode = StatusCode,
+                        Meta = Meta,
+                        Error = Error
+                    };
+                }
                 TOut value = default(TOut);
                 if (Value != null)
                     value = (TOut)(object)Value;
