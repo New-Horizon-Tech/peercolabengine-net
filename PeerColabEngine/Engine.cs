@@ -957,13 +957,23 @@ namespace PeerColabEngine
             return deserialized.AssignSerializer(serializer);
         }
 
-        public static Result Ok(int? code = null)
+        public static Result Ok()
         {
             return new Result
             {
                 Success = true,
                 Value = null,
-                StatusCode = code ?? 200
+                StatusCode = 200
+            };
+        }
+
+        public static Result Ok(int code = 200)
+        {
+            return new Result
+            {
+                Success = true,
+                Value = null,
+                StatusCode = code
             };
         }
 
@@ -1021,9 +1031,9 @@ namespace PeerColabEngine
             };
         }
 
-        public Result<T> WithMeta(Metavalues meta)
+        public Result<T> WithMeta(Action<Metavalues> meta)
         {
-            Meta = meta;
+            meta(Meta ?? new Metavalues());
             return this;
         }
 
