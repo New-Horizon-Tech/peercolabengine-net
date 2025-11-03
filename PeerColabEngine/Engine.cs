@@ -916,14 +916,17 @@ namespace PeerColabEngine
         public TransportError Error { get; set; }
         private TransportSerializer serializer;
 
-        public Result() { }
+        public Result()
+        {
+            Meta = new Metavalues();
+        }
 
         public Result(Result<T> other)
         {
             Value = other.Value;
             StatusCode = other.StatusCode != 0 ? other.StatusCode : (other.Error != null ? 500 : 200);
             Success = other.Success || IsStatusCodeSuccess(StatusCode);
-            Meta = other.Meta ?? new Metavalues();
+            Meta = other.Meta == null ? new Metavalues() : other.Meta;
             Error = other.Error ?? (!IsStatusCodeSuccess(StatusCode) ? new TransportError(StatusCode.ToString()) : null);
         }
 
@@ -963,7 +966,8 @@ namespace PeerColabEngine
             {
                 Success = true,
                 Value = null,
-                StatusCode = 200
+                StatusCode = 200,
+                Meta = new Metavalues()
             };
         }
 
@@ -974,7 +978,7 @@ namespace PeerColabEngine
                 Success = true,
                 Value = null,
                 StatusCode = code,
-                Meta = meta ?? new Metavalues()
+                Meta = meta == null ? new Metavalues() : meta
             };
         }
 
@@ -984,7 +988,7 @@ namespace PeerColabEngine
             {
                 Success = true,
                 Value = value,
-                Meta = meta ?? new Metavalues(),
+                Meta = meta == null ? new Metavalues() : meta,
                 StatusCode = 200
             };
         }
@@ -1049,14 +1053,16 @@ namespace PeerColabEngine
 
         public Result<T> AddMetaValue(Metavalue value)
         {
-            Meta = new Metavalues();
+            if (Meta == null)
+                Meta = new Metavalues();
             Meta.Add(value);
             return this;
         }
 
         public Result<T> AddMetaValues(IEnumerable<Metavalue> values)
         {
-            Meta = new Metavalues();
+            if (Meta == null)
+                Meta = new Metavalues();
             Meta.Add(values);
             return this;
         }
