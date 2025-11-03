@@ -1041,7 +1041,9 @@ namespace PeerColabEngine
 
         public Result<T> WithMeta(Action<Metavalues> meta)
         {
-            meta(Meta ?? new Metavalues());
+            if (Meta == null)
+                Meta = new Metavalues();
+            meta(Meta);
             return this;
         }
 
