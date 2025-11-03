@@ -1205,9 +1205,9 @@ namespace PeerColabEngine
             return Values.Find(i => i.ValueId == valueId);
         }
 
-        public Metavalues SetHasMoreValues()
+        public Metavalues SetHasMoreValues(bool? hasMore = null)
         {
-            HasMoreValues = true;
+            HasMoreValues = hasMore ?? true;
             return this;
         }
 
