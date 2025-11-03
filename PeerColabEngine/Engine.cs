@@ -957,9 +957,9 @@ namespace PeerColabEngine
             return deserialized.AssignSerializer(serializer);
         }
 
-        public static Result Ok()
+        public static Result<object> Ok()
         {
-            return new Result
+            return new Result<object>
             {
                 Success = true,
                 Value = null,
@@ -967,23 +967,25 @@ namespace PeerColabEngine
             };
         }
 
-        public static Result Ok(int code = 200)
+        public static Result<object> Ok(int code = 200, Metavalues meta = null)
         {
-            return new Result
+            return new Result<object>
             {
                 Success = true,
                 Value = null,
-                StatusCode = code
+                StatusCode = code,
+                Meta = meta ?? new Metavalues()
             };
         }
 
-        public static Result<V> Ok<V>(V value = default, int? code = null)
+        public static Result<V> Ok<V>(V value = default, Metavalues meta = null)
         {
             return new Result<V>
             {
                 Success = true,
                 Value = value,
-                StatusCode = code ?? 200
+                Meta = meta ?? new Metavalues(),
+                StatusCode = 200
             };
         }
 
@@ -1029,6 +1031,12 @@ namespace PeerColabEngine
                     }
                 )
             };
+        }
+
+        public Result<T> SetMeta(Metavalues value)
+        {
+            Meta = value;
+            return this;
         }
 
         public Result<T> WithMeta(Action<Metavalues> meta)
