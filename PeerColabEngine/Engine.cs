@@ -1325,19 +1325,34 @@ namespace PeerColabEngine
         public bool HasPerformer() => Performer != null;
         public bool HasTimestamp() => Timestamp != null;
 
-        public static CharacterMetaValues FromSubject(Identifier subjectOrTerm, string id = null)
+        public static CharacterMetaValues FromSubject(Identifier subjectOrTerm)
         {
-            return new CharacterMetaValues().WithSubject(subjectOrTerm, id);
+            return new CharacterMetaValues().WithSubject(subjectOrTerm);
         }
 
-        public static CharacterMetaValues FromResponsible(Identifier responsibleOrTerm, string id = null)
+        public static CharacterMetaValues FromSubject(string terminology, string id)
         {
-            return new CharacterMetaValues().WithResponsible(responsibleOrTerm, id);
+            return new CharacterMetaValues().WithSubject(terminology, id);
         }
 
-        public static CharacterMetaValues FromPerformer(Identifier performerOrTerm, string id = null)
+        public static CharacterMetaValues FromResponsible(Identifier responsibleOrTerm)
         {
-            return new CharacterMetaValues().WithPerformer(performerOrTerm, id);
+            return new CharacterMetaValues().WithResponsible(responsibleOrTerm);
+        }
+
+        public static CharacterMetaValues FromResponsible(string terminology, string id)
+        {
+            return new CharacterMetaValues().WithResponsible(terminology, id);
+        }
+
+        public static CharacterMetaValues FromPerformer(Identifier performerOrTerm)
+        {
+            return new CharacterMetaValues().WithPerformer(performerOrTerm);
+        }
+
+        public static CharacterMetaValues FromPerformer(string terminology, string id)
+        {
+            return new CharacterMetaValues().WithPerformer(terminology, id);
         }
 
         public static CharacterMetaValues FromTimestamp(System.DateTime? timestamp)
@@ -1345,21 +1360,39 @@ namespace PeerColabEngine
             return new CharacterMetaValues().WithTimestamp(timestamp);
         }
 
-        public CharacterMetaValues WithSubject(Identifier subjectOrTerm, string id = null)
+        public CharacterMetaValues WithSubject(Identifier subject)
         {
-            Subject = subjectOrTerm ?? (id != null ? new Identifier(id, null) : null);
+            Subject = subject;
             return this;
         }
 
-        public CharacterMetaValues WithResponsible(Identifier responsibleOrTerm, string id = null)
+        public CharacterMetaValues WithSubject(string terminology, string id)
         {
-            Responsible = responsibleOrTerm ?? (id != null ? new Identifier(id, null) : null);
+            Subject = new Identifier(terminology, id);
             return this;
         }
 
-        public CharacterMetaValues WithPerformer(Identifier performerOrTerm, string id = null)
+        public CharacterMetaValues WithResponsible(Identifier responsible)
         {
-            Performer = performerOrTerm ?? (id != null ? new Identifier(id, null) : null);
+            Responsible = responsible;
+            return this;
+        }
+
+        public CharacterMetaValues WithResponsible(string terminology, string id)
+        {
+            Responsible = new Identifier(terminology, id);
+            return this;
+        }
+
+        public CharacterMetaValues WithPerformer(Identifier performer)
+        {
+            Performer = performer;
+            return this;
+        }
+
+        public CharacterMetaValues WithPerformer(string terminology, string id)
+        {
+            Performer = new Identifier(terminology, id);
             return this;
         }
 
