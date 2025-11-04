@@ -21,6 +21,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace PeerColabEngine
@@ -43,6 +44,21 @@ namespace PeerColabEngine
         PROCESS,
         SEARCH,
         NAVIGATETO
+    }
+
+    public static class GlobalSerializer
+    {
+        private static TransportSerializer _serializer = new DefaultTransportSerializer();
+
+        public static TransportSerializer GetSerializer()
+        {
+            return _serializer;
+        }
+
+        public static void SetSerializer(TransportSerializer serializer)
+        {
+            _serializer = serializer;
+        }
     }
 
     public static class OperationVerbs
@@ -145,7 +161,7 @@ namespace PeerColabEngine
                     new InMemoryContextCache(),
                     false
                 ),
-                Serializer = new DefaultTransportSerializer()
+                Serializer = GlobalSerializer.GetSerializer()
             };
         }
 
@@ -401,7 +417,7 @@ namespace PeerColabEngine
 
         public TransportSerializer GetSerializer()
         {
-            return config.Serializer ?? new DefaultTransportSerializer();
+            return config.Serializer ?? GlobalSerializer.GetSerializer();
         }
 
         public TransportClient CreateClient(string clientIdentifier, string dataTenant = null)
@@ -828,6 +844,24 @@ namespace PeerColabEngine
         }
     }
 
+    class AttributeDeserializer
+    {
+        public static T SafeExtract<T>(object value, TransportSerializer serializer = null)
+        {
+            if (typeof(T) == typeof(Guid) && value is string strValue) {
+                return (T)(object)Guid.Parse(strValue);
+            } else if (value is JsonValue jsonValue) {
+                var raw = jsonValue.ToJsonString();
+                return serializer.Deserialize<T>(raw);
+            } else if (value is JsonElement jsonElement) {
+                if (serializer == null)
+                    throw new Exception("Serializer required to extract from JsonElement");
+                return serializer.Deserialize<T>(jsonElement.GetRawText());
+            }
+            return (T)value;
+        }
+    }
+
     public class TransportContext
     {
         public OperationInformation Operation { get; }
@@ -851,7 +885,7 @@ namespace PeerColabEngine
             var item = Call.Attributes.Find(i => i.Name == name) as Attribute;
             if (item == null)
                 throw new Exception("Missing attribute, use HasAttribute first if you are unsure if it exists");
-            return (T)item.Value;
+            return AttributeDeserializer.SafeExtract<T>(item.Value, Serializer);
         }
 
         public bool HasPathParameter(string name)
@@ -864,7 +898,7 @@ namespace PeerColabEngine
             var item = Call.PathParams.Find(i => i.Name == name);
             if (item == null)
                 throw new Exception("Missing path param, use HasPathParam first if you are unsure if it exists");
-            return (T)item.Value;
+            return AttributeDeserializer.SafeExtract<T>(item.Value, Serializer);
         }
 
         public static TransportContext From(TransportRequest<object> gatewayRequest)
@@ -1280,7 +1314,7 @@ namespace PeerColabEngine
         public T GetAttribute<T>(string name)
         {
             var item = this.Attributes.FirstOrDefault(a => a.Name == name);
-            return item != null ? (T)item.Value : default;
+            return item != null ? AttributeDeserializer.SafeExtract<T>(item.Value, GlobalSerializer.GetSerializer()) : default;
         }
 
         public static Metavalue With(
