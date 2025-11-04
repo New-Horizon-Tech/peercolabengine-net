@@ -971,17 +971,6 @@ namespace PeerColabEngine
             };
         }
 
-        public static Result<object> Ok(int code = 200, Metavalues meta = null)
-        {
-            return new Result<object>
-            {
-                Success = true,
-                Value = null,
-                StatusCode = code,
-                Meta = meta == null ? new Metavalues() : meta
-            };
-        }
-
         public static Result<V> Ok<V>(V value = default, Metavalues meta = null)
         {
             return new Result<V>
