@@ -1116,6 +1116,31 @@ namespace PeerColabEngine
                         Error = Error
                     };
                 }
+
+                if (Value != null && Value.GetType().Equals(typeof(JsonElement))) {
+                    var jsonElement = (JsonElement)(object)Value;
+                    TOut jsonConverted = serializer.Deserialize<TOut>(jsonElement.GetRawText());
+                    return new Result<TOut>
+                    {
+                        Success = Success,
+                        Value = jsonConverted,
+                        StatusCode = StatusCode,
+                        Meta = Meta,
+                        Error = Error
+                    };
+                } else if (Value != null && Value.GetType().Equals(typeof(JsonValue))) {
+                    var jsonValue = (JsonValue)(object)Value;
+                    TOut jsonConverted = serializer.Deserialize<TOut>(jsonValue.ToJsonString());
+                    return new Result<TOut>
+                    {
+                        Success = Success,
+                        Value = jsonConverted,
+                        StatusCode = StatusCode,
+                        Meta = Meta,
+                        Error = Error
+                    };
+                } 
+
                 TOut value = default(TOut);
                 if (Value != null)
                     value = (TOut)(object)Value;
