@@ -927,7 +927,9 @@ namespace PeerColabEngine
 
         public Result<T> DeserializeResult<T>(string data)
         {
-            return this.Serializer.Deserialize<Result<T>>(data);
+            var result = this.Serializer.Deserialize<Result<T>>(data);
+            result.AssignSerializer(this.Serializer);
+            return result;
         }
 
         public string SerializeRequest<T>(T input)
@@ -1119,7 +1121,10 @@ namespace PeerColabEngine
 
                 if (Value != null && Value.GetType().Equals(typeof(JsonElement))) {
                     var jsonElement = (JsonElement)(object)Value;
-                    TOut jsonConverted = serializer.Deserialize<TOut>(jsonElement.GetRawText());
+                    var srlzr = serializer;
+                    if (srlzr == null)
+                        srlzr = GlobalSerializer.GetSerializer();
+                    TOut jsonConverted = srlzr.Deserialize<TOut>(jsonElement.GetRawText());
                     return new Result<TOut>
                     {
                         Success = Success,
@@ -1130,7 +1135,10 @@ namespace PeerColabEngine
                     };
                 } else if (Value != null && Value.GetType().Equals(typeof(JsonValue))) {
                     var jsonValue = (JsonValue)(object)Value;
-                    TOut jsonConverted = serializer.Deserialize<TOut>(jsonValue.ToJsonString());
+                    var srlzr = serializer;
+                    if (srlzr == null)
+                        srlzr = GlobalSerializer.GetSerializer();
+                    TOut jsonConverted = srlzr.Deserialize<TOut>(jsonValue.ToJsonString());
                     return new Result<TOut>
                     {
                         Success = Success,
