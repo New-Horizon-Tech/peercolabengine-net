@@ -1153,9 +1153,12 @@ namespace PeerColabEngine
                     Error = Error
                 };
             }
-            catch
+            catch (System.Exception e)
             {
-                return InternalServerError("TransportAbstraction.Serialization.DeserializeError", "Could not convert Result").Convert<TOut>();
+                return Result<TOut>.Failed(
+                    500,
+                    "TransportAbstraction.Serialization.DeserializeError",
+                    e.Message + ": " + e.GetType().Name + (e.StackTrace != null ? "\n" + e.StackTrace : ""));
             }
         }
 
