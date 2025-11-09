@@ -1316,7 +1316,7 @@ namespace PeerColabEngine
         public string DataTenant { get; set; }
         public CharacterMetaValues InitialCharacters { get; set; }
         public CharacterMetaValues CurrentCharacters { get; set; }
-        public List<Attribute> Attributes { get; set; }
+        public List<Attribute> Attributes { get; set; } = new List<Attribute>();
 
         public bool KnowsInitialCharacters() => InitialCharacters != null;
         public bool KnowsCurrentCharacters() => CurrentCharacters != null;
@@ -1351,6 +1351,15 @@ namespace PeerColabEngine
         {
             var item = this.Attributes.FirstOrDefault(a => a.Name == name);
             return item != null ? AttributeDeserializer.SafeExtract<T>(item.Value, GlobalSerializer.GetSerializer()) : default;
+        }
+
+        public static Metavalue WithAttribute(string valueId, string name, object value)
+        {
+            var ret = new Metavalue();
+            ret.ValueId = valueId;
+            ret.DataTenant = null;
+            ret.WithAttribute(name, value);
+            return ret;
         }
 
         public static Metavalue With(
