@@ -655,20 +655,22 @@ namespace PeerColabEngine
 
     public class TransportRequest<T>
     {
-        public string OperationId { get; }
-        public string OperationVerb { get; }
-        public string OperationType { get; }
-        public string CallingClient { get; }
-        public string UsageId { get; }
-        public Guid TransactionId { get; }
-        public string DataTenant { get; }
-        public string Locale { get; }
-        public Characters Characters { get; }
-        public List<Attribute> Attributes { get; }
-        public List<Attribute> PathParams { get; }
-        public T RequestJson { get; }
-        public string Raw { get; }
+        public string OperationId { get; set; }
+        public string OperationVerb { get; set; }
+        public string OperationType { get; set; }
+        public string CallingClient { get; set; }
+        public string UsageId { get; set; }
+        public Guid TransactionId { get; set; }
+        public string DataTenant { get; set; }
+        public string Locale { get; set; }
+        public Characters Characters { get; set; }
+        public List<Attribute> Attributes { get; set; }
+        public List<Attribute> PathParams { get; set; }
+        public T RequestJson { get; set; }
+        public string Raw { get; set; }
         public TransportSerializer Serializer { get; private set; }
+
+        public TransportRequest() { }
 
         public TransportRequest(
             string operationId,
@@ -772,11 +774,13 @@ namespace PeerColabEngine
 
     public class OperationInformation
     {
-        public string Id { get; }
-        public string Verb { get; }
-        public string Type { get; }
-        public string CallingClient { get; }
-        public string UsageId { get; }
+        public string Id { get; set; }
+        public string Verb { get; set; }
+        public string Type { get; set; }
+        public string CallingClient { get; set; }
+        public string UsageId { get; set; }
+
+        public OperationInformation() { }
 
         public OperationInformation(string id, string verb, string type, string callingClient, string usageId)
         {
