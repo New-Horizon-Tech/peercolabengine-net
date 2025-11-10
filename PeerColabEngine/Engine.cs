@@ -1520,10 +1520,12 @@ namespace PeerColabEngine
 
     public class TransportError
     {
-        public string Code { get; }
-        public TransportErrorDetails Details { get; }
-        public List<TransportError> Related { get; }
-        public TransportError Parent { get; }
+        public string Code { get; set; }
+        public TransportErrorDetails Details { get; set; }
+        public List<TransportError> Related { get; set; }
+        public TransportError Parent { get; set; }
+
+        public TransportError() { }
 
         public TransportError(string code, TransportErrorDetails details = null, List<TransportError> related = null, TransportError parent = null)
         {
