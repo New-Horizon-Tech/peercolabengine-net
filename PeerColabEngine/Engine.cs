@@ -120,22 +120,24 @@ namespace PeerColabEngine
         public Task<bool> Put(Guid transactionId, CallInformation ctx)
         {
             var expiresAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + _maxLifetimeMs;
-            _cache[transactionId] = new CacheEntry { Ctx = ctx, ExpiresAt = expiresAt };
+            lock (_cache) {
+                _cache[transactionId] = new CacheEntry { Ctx = ctx, ExpiresAt = expiresAt };
+            }
             return Task.FromResult(true);
         }
 
         public Task<CallInformation> Get(Guid transactionId)
         {
-            if (!_cache.TryGetValue(transactionId, out var entry))
-                return Task.FromResult<CallInformation>(null);
+            lock (_cache) {
+                if (!_cache.TryGetValue(transactionId, out var entry))
+                    return Task.FromResult<CallInformation>(null);
 
-            if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > entry.ExpiresAt)
-            {
-                _cache.Remove(transactionId);
-                return Task.FromResult<CallInformation>(null);
+                if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > entry.ExpiresAt) {
+                    _cache.Remove(transactionId);
+                    return Task.FromResult<CallInformation>(null);
+                }
+                return Task.FromResult(entry.Ctx);
             }
-
-            return Task.FromResult(entry.Ctx);
         }
     }
 
