@@ -1280,6 +1280,8 @@ namespace PeerColabEngine
     {
         public bool HasMoreValues { get; set; }
         public List<Metavalue> Values { get; set; } = new List<Metavalue>();
+        public int? TotalValueCount { get; set; }
+        public List<Attribute> Attributes { get; set; } = new List<Attribute>();
 
         public Metavalues() { }
 
@@ -1299,6 +1301,12 @@ namespace PeerColabEngine
             return this;
         }
 
+        public Metavalues SetTotalValueCount(int? count = null)
+        {
+            TotalValueCount = count;
+            return this;
+        }
+
         public Metavalues Add(Metavalue value)
         {
             Values.Add(value);
@@ -1309,6 +1317,31 @@ namespace PeerColabEngine
         {
             Values.AddRange(values);
             return this;
+        }
+
+        public Metavalues WithAttribute(string name, object value)
+        {
+            if (Attributes == null)
+                Attributes = new List<Attribute>();
+            var attr = Attributes.FirstOrDefault(a => a.Name == name);
+            if (attr != null)
+                attr.Value = value;
+            else
+                Attributes.Add(new Attribute(name, value));
+            return this;
+        }
+
+        public bool HasAttribute(string name)
+        {
+            return Attributes != null && Attributes.Any(a => a.Name == name);
+        }
+
+        public T GetAttribute<T>(string name)
+        {
+            if (Attributes == null)
+                return default;
+            var item = Attributes.FirstOrDefault(a => a.Name == name);
+            return item != null ? AttributeDeserializer.SafeExtract<T>(item.Value, GlobalSerializer.GetSerializer()) : default;
         }
     }
 
