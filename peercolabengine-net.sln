@@ -1,8 +1,10 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeerColabEngine", "PeerColabEngine\PeerColabEngine.csproj", "{BCB9C320-6D01-8D20-76CD-1F03EB459CD7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeerColabEngine.Tests", "PeerColabEngine.Tests\PeerColabEngine.Tests.csproj", "{79139B28-1D3F-424F-93C7-658C654FFA09}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,6 +16,10 @@ Global
 		{BCB9C320-6D01-8D20-76CD-1F03EB459CD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BCB9C320-6D01-8D20-76CD-1F03EB459CD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BCB9C320-6D01-8D20-76CD-1F03EB459CD7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{79139B28-1D3F-424F-93C7-658C654FFA09}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{79139B28-1D3F-424F-93C7-658C654FFA09}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{79139B28-1D3F-424F-93C7-658C654FFA09}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{79139B28-1D3F-424F-93C7-658C654FFA09}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
