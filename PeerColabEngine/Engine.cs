@@ -347,12 +347,33 @@ namespace PeerColabEngine
         T Deserialize<T>(string serialized);
     }
 
+    public class CamelCaseNamingPolicy : System.Text.Json.JsonNamingPolicy
+    {
+        public override string ConvertName(string name)
+        {
+            if (string.IsNullOrEmpty(name) || char.IsLower(name[0]))
+                return name;
+
+            int upperRun = 0;
+            while (upperRun < name.Length && char.IsUpper(name[upperRun]))
+                upperRun++;
+
+            if (upperRun == 1)
+                return char.ToLowerInvariant(name[0]) + name.Substring(1);
+
+            if (upperRun == name.Length)
+                return name.ToLowerInvariant();
+
+            return name.Substring(0, upperRun - 1).ToLowerInvariant() + name.Substring(upperRun - 1);
+        }
+    }
+
     public class DefaultTransportSerializer : TransportSerializer
     {
         private static readonly System.Text.Json.JsonSerializerOptions CamelCaseOptions = new System.Text.Json.JsonSerializerOptions
         {
-            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-            DictionaryKeyPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = new CamelCaseNamingPolicy(),
+            DictionaryKeyPolicy = new CamelCaseNamingPolicy()
         };
 
         public string Serialize<T>(T obj)

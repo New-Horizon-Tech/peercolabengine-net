@@ -11,6 +11,12 @@ namespace PeerColabEngine.Tests
         public int Value { get; set; }
     }
 
+    public class AcronymDto
+    {
+        public string LCA { get; set; }
+        public string LCAName { get; set; }
+    }
+
     public class TestResultDto
     {
         public string Result { get; set; }

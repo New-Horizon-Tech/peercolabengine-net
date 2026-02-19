@@ -89,5 +89,47 @@ namespace PeerColabEngine.Tests
             Assert.True(deserialized.Success);
             Assert.Equal("complex", deserialized.Value.Name);
         }
+
+        [Fact]
+        public void DefaultSerializer_Serialize_AcronymProperty_UsesCorrectCamelCase()
+        {
+            var serializer = new DefaultTransportSerializer();
+            var dto = new AcronymDto { LCA = "value1", LCAName = "value2" };
+
+            var json = serializer.Serialize(dto);
+
+            Assert.Contains("\"lca\"", json);
+            Assert.Contains("\"lcaName\"", json);
+            Assert.DoesNotContain("\"lCA\"", json);
+            Assert.DoesNotContain("\"lCAName\"", json);
+        }
+
+        [Fact]
+        public void DefaultSerializer_RoundTrip_AcronymProperty()
+        {
+            var serializer = new DefaultTransportSerializer();
+            var original = new AcronymDto { LCA = "test", LCAName = "testName" };
+
+            var json = serializer.Serialize(original);
+            var deserialized = serializer.Deserialize<AcronymDto>(json);
+
+            Assert.Equal(original.LCA, deserialized.LCA);
+            Assert.Equal(original.LCAName, deserialized.LCAName);
+        }
+
+        [Fact]
+        public void CamelCaseNamingPolicy_ConvertName_HandlesAllCases()
+        {
+            var policy = new CamelCaseNamingPolicy();
+
+            Assert.Equal("helloWorld", policy.ConvertName("HelloWorld"));
+            Assert.Equal("lca", policy.ConvertName("LCA"));
+            Assert.Equal("lcaName", policy.ConvertName("LCAName"));
+            Assert.Equal("xmlParser", policy.ConvertName("XMLParser"));
+            Assert.Equal("id", policy.ConvertName("ID"));
+            Assert.Equal("ioStream", policy.ConvertName("IOStream"));
+            Assert.Equal("name", policy.ConvertName("Name"));
+            Assert.Equal("already", policy.ConvertName("already"));
+        }
     }
 }
