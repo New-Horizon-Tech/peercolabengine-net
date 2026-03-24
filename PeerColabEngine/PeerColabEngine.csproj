@@ -9,10 +9,24 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <!-- Generate XML documentation so consumers (and LLMs) get IntelliSense / API docs -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Ship symbols alongside the package for debugging and source analysis -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- Embed source in the PDB so decompilers/LLMs see real source, not IL -->
+    <EmbedAllSources>true</EmbedAllSources>
+
+    <!-- SourceLink: lets debuggers and tools pull source from GitHub -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="9.0.9" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>

@@ -42,7 +42,9 @@ jobs:
         run: dotnet pack ./PeerColabEngine/PeerColabEngine.csproj --configuration Release --no-build -p:PackageVersion=${{ steps.v.outputs.version }} -p:ContinuousIntegrationBuild=true -o ./artifacts
 
       - name: Push to NuGet.org
-        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+        run: |
+          dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+          dotnet nuget push "artifacts/*.snupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
 
       # Optional: also publish to GitHub Packages (replace OWNER)
       # - name: Push to GitHub Packages
