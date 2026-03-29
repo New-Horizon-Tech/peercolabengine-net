@@ -963,6 +963,16 @@ namespace PeerColabEngine
 
     public class Result : Result<object>
     {
+        public new static Result Ok()
+        {
+            return new Result
+            {
+                Success = true,
+                Value = null,
+                StatusCode = 200,
+                Meta = new Metavalues()
+            };
+        }
     }
 
     // Result<T> class
