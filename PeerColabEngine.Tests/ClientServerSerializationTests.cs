@@ -94,25 +94,8 @@ namespace PeerColabEngine.Tests
         public string SyncToken { get; set; }
     }
 
-    public class ChatInstructionInput
-    {
-        public string UsageInstructions { get; set; }
-        public string CurrentStateSnapshot { get; set; }
-        public List<ChatMessageDto> Items { get; set; }
-    }
-
-    public class ChatMessageDto
-    {
-        public string Type { get; set; }
-        public string Role { get; set; }
-        public string Content { get; set; }
-    }
-
-    public class ChatInstructionOutput
-    {
-        public string Message { get; set; }
-        public List<OutOfContextOperation> Operations { get; set; }
-    }
+    // Local ChatInstructionInput, ChatMessageDto, ChatInstructionOutput replaced by
+    // ProcessChatInstructionInput, ChatInstruction, ProcessChatInstructionOutput from PeerColabEngine
 
     // Operations mimicking production patterns
     public class GetProductOperation : RequestOperation<string, ProductDto>
@@ -150,11 +133,7 @@ namespace PeerColabEngine.Tests
             new TransportOperationSettings { RequiresTenant = true, CharacterSetup = new TransportOperationCharacterSetup() }) { }
     }
 
-    public class ProcessChatOperation : RequestOperation<ChatInstructionInput, ChatInstructionOutput>
-    {
-        public static readonly ProcessChatOperation Instance = new ProcessChatOperation();
-        private ProcessChatOperation() : base("PeerColab.Instructions.ProcessChatInstruction", "PROCESS") { }
-    }
+    // ProcessChatOperation replaced by ProcessChatInstruction from PeerColabEngine
 
     /// <summary>
     /// Tests that simulate real client-server communication where serialization/deserialization
@@ -1174,12 +1153,12 @@ namespace PeerColabEngine.Tests
             // Simulates PeerColab AI chat instruction processing
             var (clientSession, _) = BuildClientServerPair(server =>
             {
-                server.Intercept(ProcessChatOperation.Instance.Handle(async (input, ctx) =>
+                server.Intercept(new ProcessChatInstruction().Handle(async (input, ctx) =>
                 {
                     Assert.Equal(2, input.Items.Count);
                     Assert.Equal("system", input.Items[0].Role);
 
-                    return Result<ChatInstructionOutput>.Ok(new ChatInstructionOutput
+                    return Result<ProcessChatInstructionOutput>.Ok(new ProcessChatInstructionOutput
                     {
                         Message = "I found some tasks to create",
                         Operations = new List<OutOfContextOperation>
@@ -1199,16 +1178,16 @@ namespace PeerColabEngine.Tests
 
             var client = clientSession.CreateClient("mobile-app").WithDataTenant("t1");
             var result = await client.Request(
-                new RequestOperationRequest<ChatInstructionInput, ChatInstructionOutput>(
-                    "PeerColab.Instructions", ProcessChatOperation.Instance,
-                    new ChatInstructionInput
+                new RequestOperationRequest<ProcessChatInstructionInput, ProcessChatInstructionOutput>(
+                    "PeerColab.Instructions", new ProcessChatInstruction(),
+                    new ProcessChatInstructionInput
                     {
                         UsageInstructions = "Operation id: TestApp.Tasks.CreateTask...",
                         CurrentStateSnapshot = "{ tasks: [] }",
-                        Items = new List<ChatMessageDto>
+                        Items = new List<ChatInstruction>
                         {
-                            new ChatMessageDto { Type = "message", Role = "system", Content = "You are a helpful assistant" },
-                            new ChatMessageDto { Type = "message", Role = "user", Content = "Create a task to review the daily report" }
+                            new ChatInstruction { Type = "message", Role = "system", Content = "You are a helpful assistant" },
+                            new ChatInstruction { Type = "message", Role = "user", Content = "Create a task to review the daily report" }
                         }
                     }));
 

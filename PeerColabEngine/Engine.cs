@@ -2146,4 +2146,38 @@ namespace PeerColabEngine
             return CreateHandler(this, interceptor);
         }
     }
+
+    // ---------------------------------------------------------------------------
+    // Chat Instructions (built-in AI/LLM integration)
+    // ---------------------------------------------------------------------------
+
+    public class ChatInstruction
+    {
+        public string Type { get; set; }
+        public string Role { get; set; }
+        public string Content { get; set; }
+    }
+
+    public class ProcessChatInstructionInput
+    {
+        public string UsageInstructions { get; set; }
+        public string CurrentStateSnapshot { get; set; }
+        public List<ChatInstruction> Items { get; set; }
+    }
+
+    public class ProcessChatInstructionOutput
+    {
+        public string Message { get; set; }
+        public List<OutOfContextOperation> Operations { get; set; }
+    }
+
+    public class ProcessChatInstruction : RequestOperation<ProcessChatInstructionInput, ProcessChatInstructionOutput>
+    {
+        public ProcessChatInstruction() : base(
+            "PeerColab.Instructions.ProcessChatInstruction",
+            "PROCESS",
+            new List<string>(),
+            new TransportOperationSettings { RequiresTenant = true }
+        ) { }
+    }
 }
