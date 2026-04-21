@@ -55,6 +55,27 @@ namespace PeerColabEngine.Tests
             : base("myservice.items.get", "GET") { }
     }
 
+    public class ItemDto
+    {
+        public string ItemId { get; set; }
+    }
+
+    public class ItemCreatedEvent : DispatchOperation<ItemDto>
+    {
+        public static readonly ItemCreatedEvent Instance = new ItemCreatedEvent();
+
+        private ItemCreatedEvent()
+            : base("items.itemCreated", "action") { }
+    }
+
+    public class ItemUpdatedEvent : DispatchOperation<ItemDto>
+    {
+        public static readonly ItemUpdatedEvent Instance = new ItemUpdatedEvent();
+
+        private ItemUpdatedEvent()
+            : base("items.itemUpdated", "action") { }
+    }
+
     // A logger that captures messages for assertions
     public class TestLogger : TransportAbstractionLogger
     {

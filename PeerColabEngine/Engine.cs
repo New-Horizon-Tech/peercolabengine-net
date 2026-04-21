@@ -95,6 +95,16 @@ namespace PeerColabEngine
 
     }
 
+    public class OutOfContextEvent
+    {
+        public string UsageId { get; set; } = string.Empty;
+        public string EventId { get; set; } = string.Empty;
+        public string EventType { get; set; } = string.Empty;
+        public object RequestJson { get; set; }
+        public List<OutOfContextOperationPathParameter> PathParameters { get; set; } = new List<OutOfContextOperationPathParameter>();
+        public string CorrelationId { get; set; }
+    }
+
     public interface ContextCache
     {
         Task<bool> Put(Guid transactionId, CallInformation ctx);
@@ -221,6 +231,29 @@ namespace PeerColabEngine
             return this;
         }
 
+        public TransportSessionBuilder Subscribe<T>(EventOperationHandler<T> handler)
+        {
+            config.Interceptors.AddEventHandler(
+                handler.Operation.Id,
+                async (input, ctx) =>
+                {
+                    T convertedInput = default(T);
+                    if (input is JsonElement je)
+                        convertedInput = config.Serializer.Deserialize<T>(je.GetRawText());
+                    else
+                        convertedInput = (T)input;
+                    return await handler.Handler(convertedInput, ctx);
+                }
+            );
+            return this;
+        }
+
+        public TransportSessionBuilder SubscribePattern(string pattern, EventInterceptor<object> handler)
+        {
+            config.Interceptors.AddEventPatternHandler(pattern, handler);
+            return this;
+        }
+
         public TransportSessionBuilder InspectRequest(RequestInspector inspector)
         {
             config.Interceptors.RequestsInspector = inspector;
@@ -295,6 +328,21 @@ namespace PeerColabEngine
         public OutboundSessionBuilder InterceptPattern(string pattern, RequestInterceptor<object, object> handler)
         {
             config.Interceptors.AddPatternHandler(pattern, handler);
+            return this;
+        }
+
+        public OutboundSessionBuilder Subscribe<T>(EventOperationHandler<T> handler)
+        {
+            config.Interceptors.AddEventHandler(
+                handler.Operation.Id,
+                async (input, ctx) => await handler.Handler((T)input, ctx)
+            );
+            return this;
+        }
+
+        public OutboundSessionBuilder SubscribePattern(string pattern, EventInterceptor<object> handler)
+        {
+            config.Interceptors.AddEventPatternHandler(pattern, handler);
             return this;
         }
 
@@ -438,6 +486,72 @@ namespace PeerColabEngine
             }
         }
 
+        public Task<Result<object>> AcceptIncomingEvent(string json, List<Attribute> customAttributes = null)
+        {
+            var te = TransportEvent<object>.FromSerialized(config.Serializer, json);
+            return AcceptIncomingEvent(te, customAttributes);
+        }
+
+        public async Task<Result<object>> AcceptIncomingEvent(TransportEvent<object> te, List<Attribute> customAttributes = null)
+        {
+            var ctx = TransportContext.FromEvent(te);
+
+            if (customAttributes != null)
+            {
+                foreach (var attribute in customAttributes)
+                {
+                    if (ctx.HasAttribute(attribute.Name))
+                        continue;
+                    ctx.Call.Attributes.Add(attribute);
+                }
+            }
+
+            var result = await config.Interceptors.HandleAsEvent(te.RequestJson, ctx, matchSessions);
+            return result.AssignSerializer(config.Serializer);
+        }
+
+        public async Task<Result<object>> AcceptEvent(OutOfContextEvent ev, List<Attribute> customAttributes = null)
+        {
+            if (customAttributes == null)
+                customAttributes = new List<Attribute>();
+
+            var callInfo = CallInformation.New(config.Locale);
+            callInfo.CorrelationId = ev.CorrelationId;
+
+            var ctx = new TransportContext(
+                new OperationInformation(
+                    ev.EventId,
+                    ev.EventType,
+                    "event",
+                    "",
+                    ev.UsageId
+                ),
+                callInfo,
+                config.Serializer
+            );
+
+            var operationPathParameters = ev.PathParameters?
+                .Select(param => new Attribute(param.Name, param.Value))
+                .ToList() ?? new List<Attribute>();
+
+            foreach (var param in operationPathParameters)
+            {
+                if (ctx.HasPathParameter(param.Name))
+                    continue;
+                ctx.Call.PathParams.Add(param);
+            }
+
+            foreach (var attribute in customAttributes)
+            {
+                if (ctx.HasAttribute(attribute.Name))
+                    continue;
+                ctx.Call.Attributes.Add(attribute);
+            }
+
+            var result = await config.Interceptors.HandleAsEvent(ev.RequestJson, ctx, matchSessions);
+            return result.AssignSerializer(config.Serializer);
+        }
+
         public TransportSerializer GetSerializer()
         {
             return config.Serializer ?? GlobalSerializer.GetSerializer();
@@ -478,6 +592,14 @@ namespace PeerColabEngine
             // Clone to avoid state sharing issues
             var newCallInfo = callInfo.Clone();
             newCallInfo.Locale = locale;
+            return new TransportClient(clientIdentifier, config, newCallInfo, matchSessions);
+        }
+
+        public TransportClient WithCorrelationId(string correlationId)
+        {
+            // Clone to avoid state sharing issues
+            var newCallInfo = callInfo.Clone();
+            newCallInfo.CorrelationId = correlationId;
             return new TransportClient(clientIdentifier, config, newCallInfo, matchSessions);
         }
 
@@ -559,6 +681,36 @@ namespace PeerColabEngine
             {
                 var result = await config.Interceptors.HandleAsMessage((object)call.Input, ctx, matchSessions);
                 return result.Convert<R>();
+            }
+        }
+
+        public async Task<Result<object>> Dispatch<T>(EventDispatchRequest<T> call, int timeoutMs = 30000)
+        {
+            // Clone before sending to avoid state sharing issues
+            var requestCallInfo = callInfo.Clone();
+            requestCallInfo.TransactionId = Guid.NewGuid();
+
+            var ctx = new TransportContext(
+                call.AsOperationInformation(clientIdentifier),
+                requestCallInfo,
+                config.Serializer
+            );
+
+            var work = config.Interceptors.HandleAsEvent((object)call.Input, ctx, matchSessions);
+            using (var cts = new System.Threading.CancellationTokenSource())
+            {
+                var delay = Task.Delay(timeoutMs, cts.Token);
+                var winner = await Task.WhenAny(work, delay);
+                if (winner == work)
+                {
+                    cts.Cancel();
+                    return await work;
+                }
+                return Result<object>.Failed(
+                    504,
+                    "TransportAbstraction.DispatchTimeout",
+                    $"Dispatch exceeded {timeoutMs}ms"
+                );
             }
         }
 
@@ -691,6 +843,7 @@ namespace PeerColabEngine
         public List<Attribute> PathParams { get; }
         public T RequestJson { get; }
         public string Raw { get; }
+        public string CorrelationId { get; }
         public TransportSerializer Serializer { get; private set; }
 
         public TransportRequest(
@@ -706,7 +859,8 @@ namespace PeerColabEngine
             List<Attribute> attributes,
             List<Attribute> pathParams,
             T requestJson,
-            string raw = null)
+            string raw = null,
+            string correlationId = null)
         {
             OperationId = operationId;
             OperationVerb = operationVerb;
@@ -721,6 +875,7 @@ namespace PeerColabEngine
             PathParams = pathParams;
             RequestJson = requestJson;
             Raw = raw;
+            CorrelationId = correlationId;
         }
 
         public static TransportRequest<T> FromSerialized(TransportSerializer serializer, string serialized)
@@ -751,7 +906,9 @@ namespace PeerColabEngine
                 new Characters(ctx.Call.Characters),
                 ctx.Call.Attributes,
                 ctx.Call.PathParams,
-                input
+                input,
+                null,
+                ctx.Call.CorrelationId
             ).AssignSerializer(ctx.Serializer);
         }
 
@@ -786,7 +943,126 @@ namespace PeerColabEngine
                 deserialized.Attributes,
                 deserialized.PathParams,
                 deserialized.RequestJson,
-                serialized
+                serialized,
+                deserialized.CorrelationId
+            );
+            newFromDeserialized.AssignSerializer(Serializer);
+            return newFromDeserialized;
+        }
+    }
+
+    public class TransportEvent<T>
+    {
+        public string EventId { get; }
+        public string EventType { get; }
+        public string CallingClient { get; }
+        public string UsageId { get; }
+        public Guid TransactionId { get; }
+        public string DataTenant { get; }
+        public string Locale { get; }
+        public Characters Characters { get; }
+        public List<Attribute> Attributes { get; }
+        public List<Attribute> PathParams { get; }
+        public T RequestJson { get; }
+        public string Raw { get; }
+        public string CorrelationId { get; }
+        public TransportSerializer Serializer { get; private set; }
+
+        public TransportEvent(
+            string eventId,
+            string eventType,
+            string callingClient,
+            string usageId,
+            Guid transactionId,
+            string dataTenant,
+            string locale,
+            Characters characters,
+            List<Attribute> attributes,
+            List<Attribute> pathParams,
+            T requestJson,
+            string raw = null,
+            string correlationId = null)
+        {
+            EventId = eventId;
+            EventType = eventType;
+            CallingClient = callingClient;
+            UsageId = usageId;
+            TransactionId = transactionId;
+            DataTenant = dataTenant;
+            Locale = locale;
+            Characters = characters;
+            Attributes = attributes;
+            PathParams = pathParams;
+            RequestJson = requestJson;
+            Raw = raw;
+            CorrelationId = correlationId;
+        }
+
+        public static TransportEvent<T> FromSerialized(TransportSerializer serializer, string serialized)
+        {
+            var ev = new TransportEvent<T>(
+                "", "", "", "", Guid.Empty, "", "",
+                new Characters(),
+                new List<Attribute>(),
+                new List<Attribute>(),
+                default,
+                null
+            ).AssignSerializer(serializer);
+
+            return ev.Deserialize<T>(serialized);
+        }
+
+        public static TransportEvent<T> From(T input, TransportContext ctx)
+        {
+            return new TransportEvent<T>(
+                ctx.Operation.Id,
+                ctx.Operation.Verb,
+                ctx.Operation.CallingClient,
+                ctx.Operation.UsageId,
+                ctx.Call.TransactionId == Guid.Empty ? Guid.NewGuid() : ctx.Call.TransactionId,
+                ctx.Call.DataTenant ?? "",
+                ctx.Call.Locale,
+                new Characters(ctx.Call.Characters),
+                ctx.Call.Attributes,
+                ctx.Call.PathParams,
+                input,
+                null,
+                ctx.Call.CorrelationId
+            ).AssignSerializer(ctx.Serializer);
+        }
+
+        public TransportEvent<T> AssignSerializer(TransportSerializer serializer)
+        {
+            Serializer = serializer;
+            return this;
+        }
+
+        public string Serialize()
+        {
+            if (Serializer == null)
+                throw new Exception("No serializer assigned to TransportEvent");
+            return Serializer.Serialize(this);
+        }
+
+        public TransportEvent<TOut> Deserialize<TOut>(string serialized)
+        {
+            if (Serializer == null)
+                throw new Exception("No serializer assigned to TransportEvent");
+            var deserialized = Serializer.Deserialize<TransportEvent<TOut>>(serialized);
+            var newFromDeserialized = new TransportEvent<TOut>(
+                deserialized.EventId,
+                deserialized.EventType,
+                deserialized.CallingClient,
+                deserialized.UsageId,
+                deserialized.TransactionId,
+                deserialized.DataTenant,
+                deserialized.Locale,
+                deserialized.Characters,
+                deserialized.Attributes,
+                deserialized.PathParams,
+                deserialized.RequestJson,
+                serialized,
+                deserialized.CorrelationId
             );
             newFromDeserialized.AssignSerializer(Serializer);
             return newFromDeserialized;
@@ -819,6 +1095,7 @@ namespace PeerColabEngine
         public List<Attribute> Attributes { get; set; }
         public List<Attribute> PathParams { get; set; }
         public Guid TransactionId { get; set; }
+        public string CorrelationId { get; set; }
 
         public CallInformation(
             string locale,
@@ -826,7 +1103,8 @@ namespace PeerColabEngine
             ICharacters characters,
             List<Attribute> attributes,
             List<Attribute> pathParams,
-            Guid transactionId)
+            Guid transactionId,
+            string correlationId = null)
         {
             Locale = locale;
             DataTenant = dataTenant;
@@ -834,6 +1112,7 @@ namespace PeerColabEngine
             Attributes = attributes;
             PathParams = pathParams;
             TransactionId = transactionId;
+            CorrelationId = correlationId;
         }
 
         public static CallInformation New(string locale, string dataTenant = null, Guid? transactionId = null)
@@ -862,7 +1141,8 @@ namespace PeerColabEngine
                 } : Characters,
                 Attributes.Select(a => new Attribute(a.Name, a.Value)).ToList(),
                 PathParams.Select(p => new Attribute(p.Name, p.Value)).ToList(),
-                TransactionId
+                TransactionId,
+                CorrelationId
             );
         }
     }
@@ -942,7 +1222,8 @@ namespace PeerColabEngine
                     gatewayRequest.Characters,
                     gatewayRequest.Attributes,
                     gatewayRequest.PathParams,
-                    gatewayRequest.TransactionId
+                    gatewayRequest.TransactionId,
+                    gatewayRequest.CorrelationId
                 ),
                 gatewayRequest.Serializer
             );
@@ -958,6 +1239,36 @@ namespace PeerColabEngine
         public string SerializeRequest<T>(T input)
         {
             return TransportRequest<T>.From(input, this).Serialize();
+        }
+
+        public string SerializeEvent<T>(T input)
+        {
+            return TransportEvent<T>.From(input, this).Serialize();
+        }
+
+        public static TransportContext FromEvent(TransportEvent<object> transportEvent)
+        {
+            if (transportEvent.Serializer == null)
+                throw new Exception("Serializer required to convert from transport event");
+            return new TransportContext(
+                new OperationInformation(
+                    transportEvent.EventId,
+                    transportEvent.EventType,
+                    "event",
+                    transportEvent.CallingClient,
+                    transportEvent.UsageId
+                ),
+                new CallInformation(
+                    transportEvent.Locale,
+                    transportEvent.DataTenant,
+                    transportEvent.Characters,
+                    transportEvent.Attributes,
+                    transportEvent.PathParams,
+                    transportEvent.TransactionId,
+                    transportEvent.CorrelationId
+                ),
+                transportEvent.Serializer
+            );
         }
     }
 
@@ -1659,6 +1970,8 @@ namespace PeerColabEngine
     {
         private bool sortPatterns;
         private List<string> sortedPatterns = new List<string>();
+        private bool sortEventPatterns;
+        private List<string> sortedEventPatterns = new List<string>();
 
         public RequestInspector RequestsInspector { get; set; }
         public ResponseInspector ResponsesInspector { get; set; }
@@ -1666,6 +1979,8 @@ namespace PeerColabEngine
         private readonly Dictionary<string, RequestInterceptor<object, object>> requestHandlers = new Dictionary<string, RequestInterceptor<object, object>>();
         private readonly Dictionary<string, MessageInterceptor<object>> messageHandlers = new Dictionary<string, MessageInterceptor<object>>();
         private readonly Dictionary<string, RequestInterceptor<object, object>> patternHandlers = new Dictionary<string, RequestInterceptor<object, object>>();
+        private readonly Dictionary<string, List<EventInterceptor<object>>> eventHandlers = new Dictionary<string, List<EventInterceptor<object>>>();
+        private readonly Dictionary<string, List<EventInterceptor<object>>> eventPatternHandlers = new Dictionary<string, List<EventInterceptor<object>>>();
 
         public string SessionIdentifier { get; }
         public ContextCache ContextCache { get; set; }
@@ -1700,10 +2015,33 @@ namespace PeerColabEngine
             sortPatterns = true;
         }
 
+        public void AddEventHandler(string eventId, EventInterceptor<object> handler)
+        {
+            if (!eventHandlers.TryGetValue(eventId, out var list))
+            {
+                list = new List<EventInterceptor<object>>();
+                eventHandlers[eventId] = list;
+            }
+            list.Add(handler);
+        }
+
+        public void AddEventPatternHandler(string pattern, EventInterceptor<object> handler)
+        {
+            if (!eventPatternHandlers.TryGetValue(pattern, out var list))
+            {
+                list = new List<EventInterceptor<object>>();
+                eventPatternHandlers[pattern] = list;
+                sortEventPatterns = true;
+            }
+            list.Add(handler);
+        }
+
         public async Task<Result<object>> RouteFromGatewayRequest(object input, TransportContext ctx)
         {
             if (ctx.Operation.Type == "request")
                 return await HandleAsRequest(input, ctx);
+            else if (ctx.Operation.Type == "event")
+                return await HandleAsEvent(input, ctx);
             else
                 return (await HandleAsMessage(input, ctx)).ConvertToEmpty();
         }
@@ -1738,6 +2076,110 @@ namespace PeerColabEngine
                     return await RunRequestHandler(handler, input, cacheResult.Value);
             }
             return await RunPatternHandler(input, cacheResult.Value);
+        }
+
+        public async Task<Result<object>> HandleAsEvent(object input, TransportContext ctx, bool matchSessions = false)
+        {
+            var inspectionResult = await InspectRequest(input, ctx);
+            var cacheResult = await HandleCache(ctx, matchSessions);
+            if (!cacheResult.Success)
+                return cacheResult.Convert<object>();
+            if (inspectionResult != null)
+                return inspectionResult;
+
+            var eventId = cacheResult.Value.Operation.Id;
+            eventHandlers.TryGetValue(eventId, out var specific);
+            specific = specific ?? new List<EventInterceptor<object>>();
+
+            var matchingPattern = FindMatchingEventPattern(eventId);
+            List<EventInterceptor<object>> patternList = null;
+            if (matchingPattern != null)
+                eventPatternHandlers.TryGetValue(matchingPattern, out patternList);
+            patternList = patternList ?? new List<EventInterceptor<object>>();
+
+            var all = new List<(string Id, EventInterceptor<object> Handler)>();
+            for (int i = 0; i < specific.Count; i++)
+                all.Add((specific.Count > 1 ? $"{eventId}#{i}" : eventId, specific[i]));
+            for (int i = 0; i < patternList.Count; i++)
+                all.Add((patternList.Count > 1 ? $"{matchingPattern}#{i}" : matchingPattern, patternList[i]));
+
+            if (all.Count == 0)
+                return await InspectResponse(HandlerNotFound(eventId).ConvertToEmpty(), input, cacheResult.Value);
+
+            var tasks = all.Select(async item =>
+            {
+                try
+                {
+                    var r = await item.Handler(input, cacheResult.Value);
+                    return (Id: item.Id, Result: r);
+                }
+                catch (Exception e)
+                {
+                    return (Id: item.Id, Result: GenericError<object>(e));
+                }
+            }).ToList();
+
+            var outcomes = await Task.WhenAll(tasks);
+
+            var failed = new List<TransportError>();
+            foreach (var outcome in outcomes)
+            {
+                if (outcome.Result.Success)
+                    continue;
+
+                var err = outcome.Result.Error ?? new TransportError(
+                    "TransportAbstraction.DispatchHandlerFailed",
+                    new TransportErrorDetails { TechnicalError = "Handler returned failed result without error" }
+                );
+                failed.Add(new TransportError(
+                    err.Code,
+                    new TransportErrorDetails
+                    {
+                        TechnicalError = err.Details?.TechnicalError,
+                        UserError = err.Details?.UserError,
+                        SessionIdentifier = err.Details?.SessionIdentifier,
+                        CallingClient = err.Details?.CallingClient,
+                        CalledOperation = outcome.Id,
+                        TransactionId = err.Details?.TransactionId
+                    },
+                    err.Related,
+                    err.Parent
+                ));
+            }
+
+            Result<object> aggregated;
+            if (failed.Count == 0)
+            {
+                aggregated = Result.Ok();
+            }
+            else
+            {
+                aggregated = Result<object>.Failed(
+                    500,
+                    "TransportAbstraction.DispatchPartialFailure",
+                    $"{failed.Count} of {all.Count} subscriber(s) failed"
+                );
+                aggregated.Error.Related = failed;
+            }
+
+            return await InspectResponse(aggregated, input, cacheResult.Value);
+        }
+
+        private string FindMatchingEventPattern(string eventId)
+        {
+            if (sortEventPatterns)
+            {
+                var keys = eventPatternHandlers.Keys.ToList();
+                keys.Sort((a, b) => b.Length.CompareTo(a.Length));
+                sortedEventPatterns = keys;
+                sortEventPatterns = false;
+            }
+            foreach (var key in sortedEventPatterns)
+            {
+                if (eventId.StartsWith(key, StringComparison.OrdinalIgnoreCase))
+                    return key;
+            }
+            return null;
         }
 
         private void ValidateUniqueHandler(string id)
@@ -2152,6 +2594,42 @@ namespace PeerColabEngine
         }
 
         public MessageOperationHandler<T> Handle(Func<T, TransportContext, System.Threading.Tasks.Task<Result<object>>> interceptor)
+        {
+            return CreateHandler(this, interceptor);
+        }
+    }
+
+    public delegate Task<Result<object>> EventInterceptor<T>(T input, TransportContext ctx);
+
+    public class EventOperationHandler<T> : OperationHandler<T, object>
+    {
+        public Func<T, TransportContext, Task<Result<object>>> Handler { get; }
+
+        public EventOperationHandler(DispatchOperation<T> operation, Func<T, TransportContext, Task<Result<object>>> handler)
+            : base(operation)
+        {
+            Handler = handler;
+        }
+    }
+
+    public class EventDispatchRequest<T> : OperationRequest<T, object>
+    {
+        public EventDispatchRequest(string usageId, TransportOperation<T, object> operation, T input) : base(usageId, operation, input) { }
+    }
+
+    public abstract class DispatchOperation<T> : TransportOperation<T, object>
+    {
+        protected DispatchOperation(string id, string eventType, List<string> pathParameters = null, TransportOperationSettings settings = null)
+            : base("event", id, eventType, pathParameters, settings)
+        {
+        }
+
+        protected EventOperationHandler<T> CreateHandler(DispatchOperation<T> instance, Func<T, TransportContext, Task<Result<object>>> interceptor)
+        {
+            return new EventOperationHandler<T>(instance, interceptor);
+        }
+
+        public EventOperationHandler<T> Handle(Func<T, TransportContext, Task<Result<object>>> interceptor)
         {
             return CreateHandler(this, interceptor);
         }
